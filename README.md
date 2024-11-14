@@ -133,6 +133,11 @@ The benchmark test measures:
 
 Sample benchmark command with results:
 ```bash
+# Reset Redpanda first
+docker-compose down
+docker-compose up -d
+sleep 5  # Wait for Redpanda to start
+
 go test -v -run=XXX -bench=BenchmarkStreamPerformance ./tests
 ```
 
@@ -159,6 +164,7 @@ netstat -an | grep 9092
 - Check API server is running
 - Verify no port conflicts
 - Reset Redpanda before benchmarks
+- Restart docker-compose
 
 ## Security Notes
 
