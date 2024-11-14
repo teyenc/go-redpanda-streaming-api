@@ -1,3 +1,5 @@
+// cmd/client/ws_client/main.go
+
 package main
 
 import (

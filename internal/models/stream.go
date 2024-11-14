@@ -1,3 +1,5 @@
+// internal/models/streams.go
+
 package models
 
 import (

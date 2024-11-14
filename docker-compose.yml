@@ -1,17 +1,21 @@
-version: '3.3'
+version: '3.4'
 services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:latest
     command:
       - redpanda
       - start
-      - --smp 1
-      - --reserve-memory 0M
+      - --smp 4  # Use 4 CPU cores (adjust as needed)
+      - --reserve-memory 8G  # Reserve 8 GB of memory for Redpanda
       - --overprovisioned
       - --node-id 0
       - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
       - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
       - --set redpanda.auto_create_topics_enabled=true
+      - --lock-memory=false
+      - --unsafe-bypass-fsync=true  # Improves performance, but should only be used in non-production settings
+      # - --KAFKA_BATCH_MAX_BYTES=2097152  # Set maximum batch size for Kafka messages to 2 MB
+      # - --kafka_connections_max_per_ip=10000  # Increase max connections per IP
     ports:
       - "9092:9092"
       - "29092:29092"

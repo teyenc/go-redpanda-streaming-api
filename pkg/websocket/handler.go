@@ -1,3 +1,5 @@
+// pkg/websocket/handler.go
+
 package websocket
 
 import (
@@ -11,10 +13,10 @@ import (
 )
 
 var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
+	ReadBufferSize:  4096, // Increased buffer size for high volume
+	WriteBufferSize: 4096, // Increased buffer size for high volume
 	CheckOrigin: func(r *http.Request) bool {
-		return true // In production, implement proper origin checking
+		return true // Implement origin check for production
 	},
 }
 
@@ -50,6 +52,7 @@ func (h *Handler) readPump(stream *models.Stream) {
 
 	stream.WebSocket.SetReadLimit(512 * 1024) // 512KB max message size
 	stream.WebSocket.SetReadDeadline(time.Now().Add(60 * time.Second))
+	// stream.WebSocket.SetReadDeadline(time.Now().Add(60 * time.Second))
 	stream.WebSocket.SetPongHandler(func(string) error {
 		stream.WebSocket.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
@@ -88,13 +91,13 @@ func (h *Handler) writePump(stream *models.Stream) {
 		case <-stream.Done:
 			return
 		case message := <-stream.ProcessedData:
-			stream.WebSocket.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			stream.WebSocket.SetWriteDeadline(time.Now().Add(60 * time.Second))
 			if err := stream.WebSocket.WriteMessage(websocket.TextMessage, message); err != nil {
 				log.Printf("WebSocket write error: %v", err)
 				return
 			}
 		case <-ticker.C:
-			stream.WebSocket.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			stream.WebSocket.SetWriteDeadline(time.Now().Add(60 * time.Second))
 			if err := stream.WebSocket.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

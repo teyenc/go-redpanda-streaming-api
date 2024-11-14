@@ -1,3 +1,5 @@
+// pkg/kafka/handler.go
+
 package kafka
 
 import (
@@ -21,7 +23,7 @@ func NewHandler(brokers []string) *Handler {
 }
 
 func (h *Handler) createTopicIfNotExists(client *kgo.Client, topic string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second) // Increased timeout
 	defer cancel()
 
 	createReq := &kmsg.CreateTopicsRequest{
@@ -50,13 +52,13 @@ func (h *Handler) createTopicIfNotExists(client *kgo.Client, topic string) error
 }
 
 func (h *Handler) NewProducer(streamID string) (*kgo.Client, error) {
+
 	producer, err := kgo.NewClient(
 		kgo.SeedBrokers(h.brokers...),
-		kgo.ProducerBatchMaxBytes(1024*1024),
-		kgo.ProducerLinger(0),
-		kgo.ProducerBatchCompression(kgo.GzipCompression()),
-		kgo.AllowAutoTopicCreation(),
-		kgo.RetryTimeout(10*time.Second),
+		kgo.ProducerBatchMaxBytes(2*1024*1024), // Double the batch size
+		kgo.ProducerBatchCompression(kgo.SnappyCompression()),
+		// kgo.ProducerBatchCompression(kgo.SnappyCompression), // Use efficient compression
+		kgo.RetryTimeout(20*time.Second), // Increase timeout for retries
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create producer: %w", err)

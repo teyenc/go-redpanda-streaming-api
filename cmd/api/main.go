@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	_ "net/http/pprof"
+	"runtime"
+	"streaming-api/internal/models"
+	"streaming-api/pkg/kafka"
+	"streaming-api/pkg/websocket"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"golang.org/x/time/rate"
-
-	"streaming-api/internal/models"
-	"streaming-api/pkg/kafka"
-	"streaming-api/pkg/websocket"
 )
 
 type StreamManager struct {
@@ -103,6 +104,14 @@ func (sm *StreamManager) CreateStream() (*models.Stream, error) {
 }
 
 func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	// Start pprof server on a separate port
+	go func() {
+		log.Println("Starting pprof server on :6060")
+		log.Fatal(http.ListenAndServe(":6060", nil)) // Starts pprof server
+	}()
+
 	config := models.StreamConfig{
 		RateLimit:  100.0, // messages per second
 		BurstLimit: 200,   // burst capacity
@@ -117,13 +126,15 @@ func main() {
 	api.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) {
 		stream, err := sm.CreateStream()
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": fmt.Sprintf("failed to create stream: %v", err)})
 			return
 		}
 
-		json.NewEncoder(w).Encode(map[string]string{
-			"stream_id": stream.ID,
-		})
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"stream_id": stream.ID})
 	}).Methods("POST")
 
 	api.HandleFunc("/{stream_id}/ws", func(w http.ResponseWriter, r *http.Request) {
