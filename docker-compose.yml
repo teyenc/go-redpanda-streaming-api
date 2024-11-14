@@ -5,22 +5,52 @@ services:
     command:
       - redpanda
       - start
-      - --smp 4  # Use 4 CPU cores (adjust as needed)
-      - --reserve-memory 8G  # Reserve 8 GB of memory for Redpanda
+      - --smp 4
+      - --reserve-memory 8G
       - --overprovisioned
       - --node-id 0
-      - --kafka-addr PLAINTEXT://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
-      - --advertise-kafka-addr PLAINTEXT://redpanda:29092,OUTSIDE://localhost:9092
+      - --kafka-addr PLAINTEXT://0.0.0.0:9092
+      - --advertise-kafka-addr PLAINTEXT://localhost:9092
       - --set redpanda.auto_create_topics_enabled=true
       - --lock-memory=false
-      - --unsafe-bypass-fsync=true  # Improves performance, but should only be used in non-production settings
-      # - --KAFKA_BATCH_MAX_BYTES=2097152  # Set maximum batch size for Kafka messages to 2 MB
-      # - --kafka_connections_max_per_ip=10000  # Increase max connections per IP
+      - --unsafe-bypass-fsync=true
     ports:
       - "9092:9092"
-      - "29092:29092"
     healthcheck:
       test: ["CMD-SHELL", "rpk cluster health | grep -q 'Healthy:'"]
       interval: 10s
       timeout: 5s
       retries: 5
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    depends_on:
+      - redpanda
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - grafana-storage:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+
+volumes:
+  grafana-storage:
