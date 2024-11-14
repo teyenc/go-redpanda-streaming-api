@@ -121,6 +121,8 @@ sleep 5  # Wait for Redpanda to start
 # Run benchmark
 go test -v -run=XXX -bench=BenchmarkStreamPerformance ./tests
 ```
+At this point you should see a lot of logs in the terminal that start the server
+This should be done in about 90 seconds, depending on the machine you use
 
 ## Performance Metrics
 
@@ -130,16 +132,6 @@ The benchmark test measures:
 - Latency (min/max/average)
 - Data transfer rates
 - Success rates
-
-Sample benchmark command with results:
-```bash
-# Reset Redpanda first
-docker-compose down
-docker-compose up -d
-sleep 5  # Wait for Redpanda to start
-
-go test -v -run=XXX -bench=BenchmarkStreamPerformance ./tests
-```
 
 Expected output includes:
 - Active streams count
