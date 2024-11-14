@@ -37,7 +37,7 @@ streaming-api/
 1. Clone the repository:
 ```bash
 git clone https://github.com/teyenc/go-redpanda-streaming-api
-cd streaming-api
+cd go-redpanda-streaming-api
 ```
 
 2. Install dependencies:
