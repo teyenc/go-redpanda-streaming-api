@@ -12,17 +12,37 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type StreamResponse struct {
+	StreamID string `json:"stream_id"`
+	APIKey   string `json:"api_key"`
+}
+
 func TestSimpleConcurrentConnections(t *testing.T) {
 	numClients := 5
 	var wg sync.WaitGroup
+
+	// Register client and get API key
+	resp, err := http.Post("http://localhost:8080/register", "application/json", nil)
+	require.NoError(t, err)
+	var registration struct {
+		ClientID string `json:"client_id"`
+		APIKey   string `json:"api_key"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&registration)
+	require.NoError(t, err)
+	resp.Body.Close()
 
 	for i := 0; i < numClients; i++ {
 		wg.Add(1)
 		go func(clientID int) {
 			defer wg.Done()
 
-			// Create stream
-			resp, err := http.Post("http://localhost:8080/stream/start", "application/json", nil)
+			// Create stream with API key
+			req, err := http.NewRequest("POST", "http://localhost:8080/stream/start", nil)
+			require.NoError(t, err)
+			req.Header.Set("X-API-Key", registration.APIKey)
+
+			resp, err := http.DefaultClient.Do(req)
 			require.NoError(t, err)
 
 			var result struct {
@@ -30,14 +50,16 @@ func TestSimpleConcurrentConnections(t *testing.T) {
 			}
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
+			resp.Body.Close()
 
-			// Connect WebSocket
+			// Connect WebSocket with API key
+			headers := http.Header{}
+			headers.Set("X-API-Key", registration.APIKey)
 			url := fmt.Sprintf("ws://localhost:8080/stream/%s/ws", result.StreamID)
-			c, _, err := websocket.DefaultDialer.Dial(url, nil)
+			c, _, err := websocket.DefaultDialer.Dial(url, headers)
 			require.NoError(t, err)
 			defer c.Close()
 
-			// Send and receive one message
 			message := fmt.Sprintf(`{"stream_id": "%s", "data": "test from client %d"}`, result.StreamID, clientID)
 			err = c.WriteMessage(websocket.TextMessage, []byte(message))
 			require.NoError(t, err)
@@ -53,41 +75,54 @@ func TestSimpleConcurrentConnections(t *testing.T) {
 }
 
 func TestConcurrentConnections(t *testing.T) {
-	numClients := 1000           // Number of concurrent clients
-	var wg sync.WaitGroup        // WaitGroup to manage goroutines
-	start := make(chan struct{}) // Channel to synchronize start
+	numClients := 1000
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+
+	// Register client and get API key
+	resp, err := http.Post("http://localhost:8080/register", "application/json", nil)
+	require.NoError(t, err)
+	var registration struct {
+		ClientID string `json:"client_id"`
+		APIKey   string `json:"api_key"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&registration)
+	require.NoError(t, err)
+	resp.Body.Close()
 
 	for i := 0; i < numClients; i++ {
 		wg.Add(1)
 		go func(clientID int) {
 			defer wg.Done()
-
-			// Wait for the start signal
 			<-start
 
-			// Step 1: Create a stream via HTTP POST
-			resp, err := http.Post("http://localhost:8080/stream/start", "application/json", nil)
+			// Create stream with API key
+			req, err := http.NewRequest("POST", "http://localhost:8080/stream/start", nil)
 			require.NoError(t, err)
-			defer resp.Body.Close()
+			req.Header.Set("X-API-Key", registration.APIKey)
+
+			resp, err := http.DefaultClient.Do(req)
+			require.NoError(t, err)
 
 			var result struct {
 				StreamID string `json:"stream_id"`
 			}
 			err = json.NewDecoder(resp.Body).Decode(&result)
 			require.NoError(t, err)
+			resp.Body.Close()
 
-			// Step 2: Connect WebSocket for bi-directional communication
+			// Connect WebSocket with API key
+			headers := http.Header{}
+			headers.Set("X-API-Key", registration.APIKey)
 			url := fmt.Sprintf("ws://localhost:8080/stream/%s/ws", result.StreamID)
-			c, _, err := websocket.DefaultDialer.Dial(url, nil)
+			c, _, err := websocket.DefaultDialer.Dial(url, headers)
 			require.NoError(t, err)
 			defer c.Close()
 
-			// Step 3: Send and receive a message over WebSocket
 			message := fmt.Sprintf(`{"stream_id": "%s", "data": "test from client %d"}`, result.StreamID, clientID)
 			err = c.WriteMessage(websocket.TextMessage, []byte(message))
 			require.NoError(t, err)
 
-			// Set read deadline and wait for a response message
 			c.SetReadDeadline(time.Now().Add(5 * time.Second))
 			_, response, err := c.ReadMessage()
 			require.NoError(t, err)
@@ -95,9 +130,6 @@ func TestConcurrentConnections(t *testing.T) {
 		}(i)
 	}
 
-	// Close the start channel to release all waiting goroutines simultaneously
 	close(start)
-
-	// Wait for all goroutines to finish
 	wg.Wait()
 }

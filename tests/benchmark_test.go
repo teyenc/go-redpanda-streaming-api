@@ -1,5 +1,3 @@
-// test/benchmark_test.go
-
 package tests
 
 import (
@@ -13,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	// "github.com/stretchr/testify/require"
 )
 
 type BenchmarkMetrics struct {
@@ -37,6 +34,21 @@ func BenchmarkStreamPerformance(b *testing.B) {
 	start := make(chan struct{})
 	startTime := time.Now() // Add this to track actual start time
 
+	// Register client and get API key first
+	resp, err := http.Post("http://localhost:8080/register", "application/json", nil)
+	if err != nil {
+		b.Fatalf("Failed to register client: %v", err)
+	}
+	var registration struct {
+		ClientID string `json:"client_id"`
+		APIKey   string `json:"api_key"`
+	}
+	err = json.NewDecoder(resp.Body).Decode(&registration)
+	if err != nil {
+		b.Fatalf("Failed to decode registration: %v", err)
+	}
+	resp.Body.Close()
+
 	// Print system info
 	b.Logf("Go Version: %s", runtime.Version())
 	b.Logf("CPU Cores: %d", runtime.NumCPU())
@@ -48,8 +60,15 @@ func BenchmarkStreamPerformance(b *testing.B) {
 		go func(clientID int) {
 			defer wg.Done()
 
-			// Create stream
-			resp, err := http.Post("http://localhost:8080/stream/start", "application/json", nil)
+			// Create stream with API key
+			req, err := http.NewRequest("POST", "http://localhost:8080/stream/start", nil)
+			if err != nil {
+				b.Errorf("Failed to create request: %v", err)
+				return
+			}
+			req.Header.Set("X-API-Key", registration.APIKey)
+
+			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				b.Errorf("Failed to create stream: %v", err)
 				return
@@ -65,9 +84,11 @@ func BenchmarkStreamPerformance(b *testing.B) {
 			}
 			resp.Body.Close()
 
-			// Connect WebSocket
+			// Connect WebSocket with API key
+			headers := http.Header{}
+			headers.Set("X-API-Key", registration.APIKey)
 			url := fmt.Sprintf("ws://localhost:8080/stream/%s/ws", result.StreamID)
-			c, _, err := websocket.DefaultDialer.Dial(url, nil)
+			c, _, err := websocket.DefaultDialer.Dial(url, headers)
 			if err != nil {
 				b.Errorf("WebSocket connection failed: %v", err)
 				return
